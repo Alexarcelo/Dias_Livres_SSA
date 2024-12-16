@@ -687,3 +687,48 @@ if 'df_salvo' in st.session_state:
                 df_group_analise = ajustar_dataframe_group_mensal(df_analise)
 
                 grafico_linha_percentual(df_group_analise, 'mes/ano', 'Aproveitamento', 'Aproveitamento', 'Aproveitamento Dias Livres')
+
+        st.header('Análise por Parceiro')
+
+        filtrar_parceiros_analise = st.multiselect('Visualizar Apenas:', sorted(st.session_state.df_salvo['Parceiro'].unique().tolist()), default=None)
+
+        if len(list(filter(lambda x: x != '', st.session_state.df_config['Hoteis All Inclusive'].tolist())))>0:
+
+            visualizar_all_inclusive_2 = st.multiselect('Visualização Hoteis All Inclusive', ['Desconsiderar Hoteis All Inclusive', 'Considerar Apenas Hoteis All Inclusive'], default=None, 
+                                                        key='visualizar_all_inclusive_2')
+
+        else:
+
+            visualizar_all_inclusive_2 = None
+
+        if len(filtrar_parceiros_analise)>0:
+
+            if visualizar_all_inclusive_2 is not None:
+
+                if len(visualizar_all_inclusive_2)==1 and visualizar_all_inclusive_2[0]=='Desconsiderar Hoteis All Inclusive':
+
+                    df_analise = st.session_state.df_salvo_sem_all_inclusive.copy()
+
+                elif len(visualizar_all_inclusive_2)==1 and visualizar_all_inclusive_2[0]=='Considerar Apenas Hoteis All Inclusive':
+
+                    df_analise = st.session_state.df_salvo_apenas_all_inclusive.copy()
+
+                elif len(visualizar_all_inclusive_2)==0:
+
+                    df_analise = st.session_state.df_salvo.copy()
+
+            else:
+
+                df_analise = st.session_state.df_salvo.copy()
+
+            df_analise = df_analise[df_analise['Parceiro'].isin(filtrar_parceiros_analise)].reset_index(drop=True)
+
+            nome_servicos = ', '.join(filtrar_parceiros_analise)
+
+            plotar_analises(f'Análise {nome_servicos}', df_analise)
+
+            if 'df_group_salvo' in st.session_state and len(st.session_state.df_group_salvo)>0:
+
+                df_group_analise = ajustar_dataframe_group_mensal(df_analise)
+
+                grafico_linha_percentual(df_group_analise, 'mes/ano', 'Aproveitamento', 'Aproveitamento', 'Aproveitamento Dias Livres')
