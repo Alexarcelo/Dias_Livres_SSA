@@ -105,7 +105,7 @@ def inserir_datas_in_out_voo_in(df_in):
 
     df_in_out = df_in_out.rename(columns={'Data Execucao_x': 'Data IN', 'Data Execucao_y': 'Data OUT', 'Voo': 'Voo IN'})
 
-    df_in_out['Dias Estadia'] = (pd.to_datetime(df_in_out['Data OUT']) - pd.to_datetime(df_in_out['Data IN'])).dt.days
+    df_in_out['Dias Estadia'] = (pd.to_datetime(df_in_out['Data OUT']) - pd.to_datetime(date.today())).dt.days
 
     df_in_out['Dias Estadia'] = df_in_out['Dias Estadia'].fillna(media_estadia)
 
@@ -194,7 +194,7 @@ def recalcular_servicos_reservas_diferentes(df_in_out, data_relatorio):
     df_in_out['Data IN'] = pd.to_datetime(df_in_out['Data IN'])
     df_in_out['Data OUT'] = pd.to_datetime(df_in_out['Data OUT'])
 
-    df_router_2 = st.session_state.df_router[(st.session_state.df_router['Data Execucao']>=data_relatorio) & (st.session_state.df_router['Tipo de Servico'].isin(['TOUR', 'TRANSFER']))]\
+    df_router_2 = st.session_state.df_router[(st.session_state.df_router['Data Execucao']>data_relatorio) & (st.session_state.df_router['Tipo de Servico'].isin(['TOUR', 'TRANSFER']))]\
         .reset_index(drop=True)
     df_router_2['Chave'] = df_router_2['Cliente'] + "|" + df_router_2['Parceiro']
 
