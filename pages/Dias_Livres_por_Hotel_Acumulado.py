@@ -115,6 +115,8 @@ def inserir_datas_in_out_voo_in(df_in):
 
     st.session_state.df_reservas_negativas = df_in_out[df_in_out['Dias Estadia']<0].reset_index(drop=True)
 
+    st.session_state.df_reservas_negativas = st.session_state.df_reservas_negativas[st.session_state.df_reservas_negativas['Data OUT']>date.today()].reset_index(drop=True)
+
     df_in_out = df_in_out[(df_in_out['Dias Estadia']>=0) & (df_in_out['Dias Estadia']<100)].reset_index(drop=True)
 
     df_in_out = df_in_out.drop_duplicates().reset_index(drop=True)
