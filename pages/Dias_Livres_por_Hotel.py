@@ -7,6 +7,7 @@ import gspread
 from google.cloud import secretmanager 
 import json
 from google.oauth2.service_account import Credentials
+from datetime import date, timedelta
 
 def gerar_df_phoenix(vw_name, base_luck):
     # Parametros de Login AWS
@@ -20,7 +21,7 @@ def gerar_df_phoenix(vw_name, base_luck):
     conexao = mysql.connector.connect(**config)
     cursor = conexao.cursor()
 
-    request_name = f'SELECT * FROM {vw_name}'
+    request_name = f'SELECT `Status do Servico`, `Status da Reserva`, `Data Execucao`, `Servico`, `Reserva`, `Total ADT`, `Total CHD`, `Tipo de Servico`, `Modo do Servico`, `Voo`, `Horario Voo`, `Est Destino`, `Cliente`, `Telefone Cliente`, `Parceiro` FROM {vw_name}'
 
     # Script MySql para requests
     cursor.execute(
@@ -99,7 +100,7 @@ def inserir_datas_in_out_voo_in(df_in):
 
     df_out = st.session_state.df_router[(st.session_state.df_router['Tipo de Servico']=='OUT') & (st.session_state.df_router['Reserva Mae'].isin(lista_reservas_in))].reset_index(drop=True)
 
-    df_in_out = pd.merge(df_in[['Reserva Mae', 'Servico', 'Voo', 'Horario Voo', 'Data Execucao', 'Est Destino', 'Cliente', 'Telefone Cliente', 'Parceiro', 'Total Paxs']], 
+    df_in_out = pd.merge(df_in[['Reserva Mae', 'Modo do Servico', 'Servico', 'Voo', 'Horario Voo', 'Data Execucao', 'Est Destino', 'Cliente', 'Telefone Cliente', 'Parceiro', 'Total Paxs']], 
                          df_out[['Reserva Mae', 'Data Execucao']], on='Reserva Mae', how='left')
 
     df_in_out = df_in_out.rename(columns={'Data Execucao_x': 'Data IN', 'Data Execucao_y': 'Data OUT', 'Voo': 'Voo IN'})
@@ -144,13 +145,20 @@ def calcular_estadia_dias_livres(df_in_out):
 
     return df_in_out
 
+def transformar_em_listas(idiomas):
+
+    return list(set(idiomas))
+
 def plotar_tabela_com_voos_dias_livres(df_in_out):
 
-    df_final = df_in_out.groupby('Voo IN').agg({'Horario Voo': 'first', 'Dias Livres': 'sum'}).reset_index()
-
+    df_final = df_in_out.groupby(['Voo IN', 'Modo do Servico']).agg({'Horario Voo': 'first', 'Total Paxs': 'sum', 'Dias Livres': 'sum', 
+                                                                     'Reserva Mae': transformar_em_listas}).reset_index()
+    
     df_final = df_final.sort_values(by=['Dias Livres'], ascending=False).reset_index(drop=True)
 
-    gb = GridOptionsBuilder.from_dataframe(df_final)
+    df_tabela = df_final[['Voo IN', 'Modo do Servico', 'Horario Voo', 'Total Paxs', 'Dias Livres']]
+
+    gb = GridOptionsBuilder.from_dataframe(df_tabela)
     gb.configure_selection('multiple', use_checkbox=True, header_checkbox=True)
     gb.configure_grid_options(domLayout='autoHeight')
     gb.configure_grid_options(domLayout='autoWidth')
@@ -158,13 +166,19 @@ def plotar_tabela_com_voos_dias_livres(df_in_out):
 
     with row1[1]:
 
-        grid_response = AgGrid(df_final, gridOptions=gridOptions, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+        grid_response = AgGrid(df_tabela, gridOptions=gridOptions, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
 
     selected_rows = grid_response['selected_rows']
 
-    return selected_rows
+    return selected_rows, df_final
 
-def plotar_tabela_dias_livres_por_hotel(df_ref_2):
+def plotar_tabela_dias_livres_por_hotel(df_in_out, selected_rows, df_final):
+
+    df_final_selected = df_final.loc[selected_rows.index.astype(int)]
+
+    reserva_mae_unica = list(set(item for sublist in df_final_selected['Reserva Mae'] for item in sublist))
+
+    df_ref_2 = df_in_out[df_in_out['Reserva Mae'].isin(reserva_mae_unica)].groupby(['Est Destino']).agg({'Total Paxs': 'sum', 'Dias Livres': 'sum'}).reset_index()
             
     gb = GridOptionsBuilder.from_dataframe(df_ref_2)
     gb.configure_selection('multiple', use_checkbox=True, header_checkbox=True)
@@ -188,20 +202,29 @@ def plotar_tabela_row_servico_especifico(df_ref_3, row2):
         container_dataframe.dataframe(df_ref_3[['Reserva Mae', 'Cliente', 'Telefone Cliente', 'Servico', 'Est Destino', 'Voo IN', 'Data IN', 'Data OUT', 'Total Paxs', 'Qtd. Servicos', 'Dias Estadia', 
                                                 'Dias Livres']].sort_values(by='Voo IN'), hide_index=True, use_container_width=True)
 
-def plotar_tabela_servicos_no_voo(df_ref):
+def plotar_tabela_servicos_no_voo(df_in_out, selected_rows, df_final):
 
-    gb = GridOptionsBuilder.from_dataframe(df_ref)
+    df_final_selected = df_final.loc[selected_rows.index.astype(int)]
+
+    reserva_mae_unica = list(set(item for sublist in df_final_selected['Reserva Mae'] for item in sublist))
+
+    df_ref = df_in_out[df_in_out['Reserva Mae'].isin(reserva_mae_unica)].groupby(['Servico', 'Modo do Servico'])\
+        .agg({'Total Paxs': 'sum', 'Dias Livres': 'sum', 'Reserva Mae': transformar_em_listas}).reset_index()
+    
+    df_tabela = df_ref[['Servico', 'Modo do Servico', 'Total Paxs', 'Dias Livres']]
+
+    gb = GridOptionsBuilder.from_dataframe(df_tabela)
     gb.configure_selection('multiple', use_checkbox=True, header_checkbox=True)
     gb.configure_grid_options(domLayout='autoWidth')
     gridOptions = gb.build()
 
     with row1[1]:
 
-        grid_response = AgGrid(df_ref, gridOptions=gridOptions, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
+        grid_response = AgGrid(df_tabela, gridOptions=gridOptions, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
 
     selected_rows_2 = grid_response['selected_rows']
 
-    return selected_rows_2
+    return selected_rows_2, df_ref
 
 def recalcular_servicos_reservas_diferentes(df_in_out, data_relatorio):
 
@@ -224,25 +247,14 @@ def recalcular_servicos_reservas_diferentes(df_in_out, data_relatorio):
 
 def puxar_aba_simples(id_gsheet, nome_aba, nome_df):
 
-    # GCP projeto onde está a chave credencial
     project_id = "grupoluck"
-
-    # ID da chave credencial do google.
     secret_id = "cred-luck-aracaju"
-
-    # Cria o cliente.
     secret_client = secretmanager.SecretManagerServiceClient()
-
     secret_name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
     response = secret_client.access_secret_version(request={"name": secret_name})
-
     secret_payload = response.payload.data.decode("UTF-8")
-
     credentials_info = json.loads(secret_payload)
-
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-
-    # Use the credentials to authorize the gspread client
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     client = gspread.authorize(credentials)
 
@@ -256,25 +268,14 @@ def puxar_aba_simples(id_gsheet, nome_aba, nome_df):
 
 def inserir_config(df_itens_faltantes, id_gsheet, nome_aba):
 
-    # GCP projeto onde está a chave credencial
     project_id = "grupoluck"
-
-    # ID da chave credencial do google.
     secret_id = "cred-luck-aracaju"
-
-    # Cria o cliente.
     secret_client = secretmanager.SecretManagerServiceClient()
-
     secret_name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
     response = secret_client.access_secret_version(request={"name": secret_name})
-
     secret_payload = response.payload.data.decode("UTF-8")
-
     credentials_info = json.loads(secret_payload)
-
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-
-    # Use the credentials to authorize the gspread client
     credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
     client = gspread.authorize(credentials)
     
@@ -325,10 +326,16 @@ if st.session_state.mostrar_config == True:
 
     with row01[0]:
 
-        filtrar_status_servico = st.multiselect('Excluir Status do Serviço', sorted(st.session_state.df_router_bruto['Status do Servico'].dropna().unique().tolist()), key='filtrar_status_servico', 
-                                                default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status do Serviço'].tolist())))
+        lista_opcoes_status_servicos = sorted(set(sorted(st.session_state.df_router_bruto['Status do Servico'].dropna().unique().tolist()) + 
+                                                  list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status do Serviço'].tolist()))))
 
-        filtrar_status_reserva = st.multiselect('Excluir Status da Reserva', sorted(st.session_state.df_router_bruto['Status da Reserva'].unique().tolist()), key='filtrar_status_reserva', 
+        filtrar_status_servico = st.multiselect('Excluir Status do Serviço', lista_opcoes_status_servicos, key='filtrar_status_servico', 
+                                                default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status do Serviço'].tolist())))
+        
+        lista_opcoes_status_reserva = sorted(set(sorted(st.session_state.df_router_bruto['Status da Reserva'].unique().tolist()) + 
+                                                 list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status da Reserva'].tolist()))))
+
+        filtrar_status_reserva = st.multiselect('Excluir Status da Reserva', lista_opcoes_status_reserva, key='filtrar_status_reserva', 
                                                 default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status da Reserva'].tolist())))
         
         combos_flex = st.multiselect('Combo Flexível', 
@@ -336,13 +343,20 @@ if st.session_state.mostrar_config == True:
                                      key='combos_flex', default=list(filter(lambda x: x != '', st.session_state.df_config['Combos Flexíveis'].tolist())))
 
     with row01[1]:
+
+        lista_opcoes_servicos_in = sorted(set(sorted(st.session_state.df_router_bruto[st.session_state.df_router_bruto['Tipo de Servico']=='IN']['Servico'].unique().tolist()) + 
+                                                     list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços IN'].tolist()))))
         
-        filtrar_servicos_in = st.multiselect('Excluir Serviços IN', sorted(st.session_state.df_router_bruto[st.session_state.df_router_bruto['Tipo de Servico']=='IN']['Servico'].unique().tolist()), 
-                                            key='filtrar_servicos_in', default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços IN'].tolist())))
+        filtrar_servicos_in = st.multiselect('Excluir Serviços IN', lista_opcoes_servicos_in, key='filtrar_servicos_in', 
+                                             default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços IN'].tolist())))
         
-        filtrar_servicos_tt = st.multiselect('Excluir Serviços TOUR', 
-                                            sorted(st.session_state.df_router_bruto[st.session_state.df_router_bruto['Tipo de Servico'].isin(['TOUR', 'TRANSFER'])]['Servico'].unique().tolist()), 
-                                            key='filtrar_servicos_tt', default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços TOUR'].tolist())))
+        lista_opcoes_servicos = sorted(set(sorted(st.session_state.df_router_bruto[st.session_state.df_router_bruto['Tipo de Servico'].dropna().isin(['TOUR', 'TRANSFER'])]['Servico'].unique().tolist()) + 
+                                           list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços TOUR'].tolist()))))
+        
+        container_servicos = st.container(height=200)
+        
+        filtrar_servicos_tt = container_servicos.multiselect('Excluir Serviços TOUR', lista_opcoes_servicos, key='filtrar_servicos_tt', 
+                                             default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços TOUR'].tolist())))
         
     with row01[2]:
 
@@ -412,9 +426,9 @@ with row1[0]:
 
     container_datas.subheader('Período')
 
-    data_inicial = container_datas.date_input('Data Inicial', value=None ,format='DD/MM/YYYY', key='data_inicial')
+    data_inicial = container_datas.date_input('Data Inicial', value=date.today() +  timedelta(days=1) ,format='DD/MM/YYYY', key='data_inicial')
 
-    data_final = container_datas.date_input('Data Final', value=None ,format='DD/MM/YYYY', key='data_final')
+    data_final = container_datas.date_input('Data Final', value=date.today() +  timedelta(days=1) ,format='DD/MM/YYYY', key='data_final')
 
     gerar_relatorio = container_datas.button('Gerar Relatório')
 
@@ -531,7 +545,7 @@ if 'df_reservas_negativas' in st.session_state:
 
 if len(st.session_state.df_final)>0:
 
-    selected_rows = plotar_tabela_com_voos_dias_livres(st.session_state.df_final)
+    selected_rows, df_final = plotar_tabela_com_voos_dias_livres(st.session_state.df_final)
 
     # Segunda plotagem de tabelas depois do usuário selecionar voos e serviços
 
@@ -539,9 +553,9 @@ if len(st.session_state.df_final)>0:
 
         df_ref = st.session_state.df_final[st.session_state.df_final['Voo IN'].isin(selected_rows['Voo IN'].unique().tolist())].reset_index(drop=True)
 
-        total_dias_livres = df_ref['Dias Livres'].sum()
+        total_dias_livres = selected_rows['Dias Livres'].sum()
 
-        total_paxs_ref = df_ref['Total Paxs'].sum()
+        total_paxs_ref = selected_rows['Total Paxs'].sum()
 
         with row1[1]:
 
@@ -549,18 +563,23 @@ if len(st.session_state.df_final)>0:
 
             st.subheader(f'Total de paxs dos voos selecionados = {int(total_paxs_ref)}')
 
-        df_ref = st.session_state.df_final[st.session_state.df_final['Voo IN'].isin(selected_rows['Voo IN'].unique().tolist())].groupby(['Servico'])['Dias Livres'].sum().reset_index()   
-
-        selected_rows_2 = plotar_tabela_servicos_no_voo(df_ref)
+        selected_rows_2, df_final_2 = plotar_tabela_servicos_no_voo(st.session_state.df_final, selected_rows, df_final)
 
         if selected_rows_2 is not None and len(selected_rows_2)>0:
-
-            df_ref_2 = st.session_state.df_final[(st.session_state.df_final['Voo IN'].isin(selected_rows['Voo IN'].unique().tolist())) & 
-                                                 (st.session_state.df_final['Servico'].isin(selected_rows_2['Servico'].unique().tolist()))].groupby('Est Destino')['Dias Livres'].sum().reset_index()
             
-            selected_rows_3 = plotar_tabela_dias_livres_por_hotel(df_ref_2)
+            selected_rows_3 = plotar_tabela_dias_livres_por_hotel(st.session_state.df_final, selected_rows_2, df_final_2)
 
             if selected_rows_3 is not None and len(selected_rows_3)>0:
+
+                total_dias_livres = selected_rows_3['Dias Livres'].sum()
+
+                total_paxs_ref = selected_rows_3['Total Paxs'].sum()
+
+                with row1[0]:
+
+                    st.subheader(f'Total de dias livres dos hoteis selecionados = {int(total_dias_livres)}')
+
+                    st.subheader(f'Total de paxs dos hoteis selecionados = {int(total_paxs_ref)}')
 
                 df_ref_3 = st.session_state.df_final[(st.session_state.df_final['Voo IN'].isin(selected_rows['Voo IN'].unique().tolist())) & 
                                                      (st.session_state.df_final['Servico'].isin(selected_rows_2['Servico'].unique().tolist())) & 
