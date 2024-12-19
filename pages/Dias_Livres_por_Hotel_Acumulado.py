@@ -313,10 +313,16 @@ if st.session_state.mostrar_config == True:
 
     with row01[0]:
 
-        filtrar_status_servico = st.multiselect('Excluir Status do Serviço', sorted(st.session_state.df_router_bruto['Status do Servico'].dropna().unique().tolist()), key='filtrar_status_servico', 
-                                                default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status do Serviço'].tolist())))
+        lista_opcoes_status_servicos = sorted(set(sorted(st.session_state.df_router_bruto['Status do Servico'].dropna().unique().tolist()) + 
+                                                  list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status do Serviço'].tolist()))))
 
-        filtrar_status_reserva = st.multiselect('Excluir Status da Reserva', sorted(st.session_state.df_router_bruto['Status da Reserva'].unique().tolist()), key='filtrar_status_reserva', 
+        filtrar_status_servico = st.multiselect('Excluir Status do Serviço', lista_opcoes_status_servicos, key='filtrar_status_servico', 
+                                                default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status do Serviço'].tolist())))
+        
+        lista_opcoes_status_reserva = sorted(set(sorted(st.session_state.df_router_bruto['Status da Reserva'].unique().tolist()) + 
+                                                 list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status da Reserva'].tolist()))))
+
+        filtrar_status_reserva = st.multiselect('Excluir Status da Reserva', lista_opcoes_status_reserva, key='filtrar_status_reserva', 
                                                 default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Status da Reserva'].tolist())))
         
         combos_flex = st.multiselect('Combo Flexível', 
@@ -324,13 +330,20 @@ if st.session_state.mostrar_config == True:
                                      key='combos_flex', default=list(filter(lambda x: x != '', st.session_state.df_config['Combos Flexíveis'].tolist())))
 
     with row01[1]:
+
+        lista_opcoes_servicos_in = sorted(set(sorted(st.session_state.df_router_bruto[st.session_state.df_router_bruto['Tipo de Servico']=='IN']['Servico'].unique().tolist()) + 
+                                                     list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços IN'].tolist()))))
         
-        filtrar_servicos_in = st.multiselect('Excluir Serviços IN', sorted(st.session_state.df_router_bruto[st.session_state.df_router_bruto['Tipo de Servico']=='IN']['Servico'].unique().tolist()), 
-                                            key='filtrar_servicos_in', default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços IN'].tolist())))
+        filtrar_servicos_in = st.multiselect('Excluir Serviços IN', lista_opcoes_servicos_in, key='filtrar_servicos_in', 
+                                             default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços IN'].tolist())))
         
-        filtrar_servicos_tt = st.multiselect('Excluir Serviços TOUR', 
-                                            sorted(st.session_state.df_router_bruto[st.session_state.df_router_bruto['Tipo de Servico'].isin(['TOUR', 'TRANSFER'])]['Servico'].unique().tolist()), 
-                                            key='filtrar_servicos_tt', default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços TOUR'].tolist())))
+        lista_opcoes_servicos = sorted(set(sorted(st.session_state.df_router_bruto[st.session_state.df_router_bruto['Tipo de Servico'].dropna().isin(['TOUR', 'TRANSFER'])]['Servico'].unique().tolist()) + 
+                                           list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços TOUR'].tolist()))))
+        
+        container_servicos = st.container(height=200)
+        
+        filtrar_servicos_tt = container_servicos.multiselect('Excluir Serviços TOUR', lista_opcoes_servicos, key='filtrar_servicos_tt', 
+                                             default=list(filter(lambda x: x != '', st.session_state.df_config['Filtrar Serviços TOUR'].tolist())))
         
     with row01[2]:
 
